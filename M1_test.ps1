@@ -1,7 +1,7 @@
-ping champlain.edu
-ping fw-caw.caw.local
-ping w1-caw.caw.local
-ping w2-caw.caw.local
-ping dc1-caw.caw.local
-ping dc2-caw.caw.local
-ping mgmt1-caw.caw.local
+Test-Connection -TargetName champlain.edu | Select-Object @{Name="Target";Expression={$_.Address}}, @{Name="Latency (ms)";Expression={$_.ResponseTime}}, @{Name="Status";Expression={$_.StatusCode}}
+Test-Connection -TargetName fw-caw.caw.local | Select-Object @{Name="Target";Expression={$_.Address}}, @{Name="Latency (ms)";Expression={$_.ResponseTime}}, @{Name="Status";Expression={$_.StatusCode}}
+Test-Connection -TargetName dc1-caw.caw.local | Select-Object @{Name="Target";Expression={$_.Address}}, @{Name="Latency (ms)";Expression={$_.ResponseTime}}, @{Name="Status";Expression={$_.StatusCode}}
+Test-Connection -TargetName dc2-caw.caw.local | Select-Object @{Name="Target";Expression={$_.Address}}, @{Name="Latency (ms)";Expression={$_.ResponseTime}}, @{Name="Status";Expression={$_.StatusCode}}
+Test-Connection -TargetName w1-caw.caw.local | Select-Object @{Name="Target";Expression={$_.Address}}, @{Name="Latency (ms)";Expression={$_.ResponseTime}}, @{Name="Status";Expression={$_.StatusCode}}
+Test-Connection -TargetName w2-caw.caw.local | Select-Object @{Name="Target";Expression={$_.Address}}, @{Name="Latency (ms)";Expression={$_.ResponseTime}}, @{Name="Status";Expression={$_.StatusCode}}
+Test-Connection -TargetName mgmt1-caw.caw.local | Select-Object @{Name="Target";Expression={$_.Address}}, @{Name="Latency (ms)";Expression={$_.ResponseTime}}, @{Name="Status";Expression={$_.StatusCode}}
