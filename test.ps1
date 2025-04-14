@@ -1,13 +1,14 @@
-ping fw-caw.caw.local
-ping docker-caw.caw.local
-ping dhcp1-caw.caw.local
-ping dhcp2-caw.caw.local
-ping dc1-caw.caw.local
-ping dc2-caw.caw.local
-ping mgmt1-caw.caw.local
-ping mgmt2-caw.caw.local
-ping dfs1-caw.caw.local
-ping dfs2-caw.caw.local
-ping w1-caw.caw.local
-ping w2-caw.caw.local
-ping util-caw.caw.local
+Test-Connection -Count 1 champlain.edu
+Test-Connection -Count 1 fw-caw.caw.local
+Test-Connection -Count 1 docker-caw.caw.local
+Test-Connection -Count 1 dhcp1-caw.caw.local
+Test-Connection -Count 1 dhcp2-caw.caw.local
+Test-Connection -Count 1 dc1-caw.caw.local
+Test-Connection -Count 1 dc2-caw.caw.local
+Test-Connection -Count 1 mgmt1-caw.caw.local
+Test-Connection -Count 1 mgmt2-caw.caw.local
+Test-Connection -Count 1 dfs1-caw.caw.local
+Test-Connection -Count 1 dfs2-caw.caw.local
+Test-Connection -Count 1 w1-caw.caw.local
+Test-Connection -Count 1 w2-caw.caw.local
+Test-Connection -Count 1 util-caw.caw.local
