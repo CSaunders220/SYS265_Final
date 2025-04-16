@@ -1,4 +1,9 @@
-# Run on both DFS1 and DFS2
+$rootPath = "C:\DFSShares"
+New-Item -Path $rootPath -ItemType Directory -Force
+New-Item -Path "$rootPath\Profiles" -ItemType Directory -Force
+New-Item -Path "$rootPath\Profiles\UserProfiles" -ItemType Directory -Force
+New-Item -Path "$rootPath\Profiles\RedirectedFolders" -ItemType Directory -Force
+
 New-SmbShare -Name "Profiles" -Path "$rootPath\Profiles" -FullAccess "Domain Admins","SYSTEM" -ChangeAccess "Authenticated Users"
 
 # For the main Profiles folder
