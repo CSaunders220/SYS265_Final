@@ -1,6 +1,6 @@
 ---
-# Proper Nextcloud Deployment Playbook
-# Uses standard Ansible modules
+# Nextcloud Deployment Playbook without DNF module
+# Avoids the dnf module that's causing Python compatibility issues
 
 - name: Deploy Nextcloud with Ansible
   hosts: util-caw
@@ -27,23 +27,13 @@
     
   tasks:
     - name: Install required packages
-      dnf:
-        name:
-          - httpd
-          - mariadb-server
-          - php
-          - php-gd
-          - php-mbstring
-          - php-intl
-          - php-mysqlnd
-          - php-opcache
-          - php-xml
-          - php-zip
-          - php-json
-          - php-curl
-          - wget
-          - unzip
-        state: present
+      command: >
+        yum install -y httpd mariadb-server php php-gd php-mbstring php-intl
+        php-mysqlnd php-opcache php-xml php-zip php-json php-curl wget unzip
+      args:
+        warn: false
+      register: pkg_result
+      changed_when: "'Nothing to do' not in pkg_result.stdout"
     
     - name: Start and enable MariaDB
       service:
@@ -134,11 +124,13 @@
       notify: restart apache
     
     - name: Open firewall for HTTP
-      firewalld:
-        service: http
-        permanent: yes
-        state: enabled
-      notify: reload firewall
+      command: firewall-cmd --permanent --add-service=http
+      register: fw_result
+      changed_when: "'success' in fw_result.stdout"
+      
+    - name: Reload firewall
+      command: firewall-cmd --reload
+      changed_when: false
     
     - name: Display completion message
       debug:
@@ -162,8 +154,3 @@
       service:
         name: httpd
         state: restarted
-    
-    - name: reload firewall
-      service:
-        name: firewalld
-        state: reloaded
