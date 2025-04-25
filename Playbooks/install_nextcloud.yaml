@@ -1,3 +1,4 @@
+
 - name: Deploy Nextcloud on util-caw
   hosts: util-caw
   become: yes
@@ -6,15 +7,12 @@
     nextcloud_version: "27.1.2"
     
     # Database configuration
-    db_type: "mysql"       # mysql or pgsql
     db_name: "nextcloud"
     db_user: "nextcloud"
     db_password: "ChangeMe123!"  # Change this in production!
     
     # Web server configuration
-    web_server: "apache"   # apache or nginx
     nextcloud_domain: "localhost"
-    nextcloud_port: 80
     
     # Admin account
     admin_user: "ncadmin"
@@ -22,61 +20,44 @@
     
     # Paths
     nextcloud_data_dir: "/var/nc-data"
-    nextcloud_install_dir: "/var/www/html/nextcloud"
     
   tasks:
-    - name: Install EPEL repository
-      package:
-        name: epel-release
-        state: present
-    
-    - name: Install required dependencies
-      package:
+    - name: Install dependencies
+      yum:
         name:
           - httpd
           - mariadb-server
-          - mariadb
           - php
           - php-gd
           - php-mbstring
           - php-intl
-          - php-pecl-apcu
           - php-mysqlnd
-          - php-json
           - php-opcache
-          - php-process
           - php-xml
           - php-zip
-          - php-fileinfo
           - wget
           - unzip
-          - policycoreutils-python-utils
         state: present
     
     - name: Start and enable MariaDB
-      systemd:
+      service:
         name: mariadb
         state: started
         enabled: yes
     
     - name: Start and enable Apache
-      systemd:
+      service:
         name: httpd
         state: started
         enabled: yes
     
-    - name: Create database
-      mysql_db:
-        name: "{{ db_name }}"
-        state: present
-      
-    - name: Create database user
-      mysql_user:
-        name: "{{ db_user }}"
-        password: "{{ db_password }}"
-        priv: "{{ db_name }}.*:ALL"
-        host: localhost
-        state: present
+    - name: Create Nextcloud database
+      shell: |
+        mysql -e "CREATE DATABASE IF NOT EXISTS {{ db_name }} CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
+        mysql -e "CREATE USER IF NOT EXISTS '{{ db_user }}'@'localhost' IDENTIFIED BY '{{ db_password }}';"
+        mysql -e "GRANT ALL PRIVILEGES ON {{ db_name }}.* TO '{{ db_user }}'@'localhost';"
+        mysql -e "FLUSH PRIVILEGES;"
+      changed_when: false
     
     - name: Create Nextcloud data directory
       file:
@@ -86,51 +67,33 @@
         group: apache
         mode: '0750'
     
+    - name: Check if Nextcloud is already installed
+      stat:
+        path: /var/www/html/nextcloud
+      register: nextcloud_installed
+    
     - name: Download Nextcloud
       get_url:
         url: "https://download.nextcloud.com/server/releases/nextcloud-{{ nextcloud_version }}.zip"
         dest: "/tmp/nextcloud.zip"
         mode: '0644'
+      when: not nextcloud_installed.stat.exists
     
     - name: Extract Nextcloud
-      unarchive:
-        src: "/tmp/nextcloud.zip"
-        dest: "/var/www/html/"
-        remote_src: yes
-        creates: "{{ nextcloud_install_dir }}"
-    
-    - name: Set proper ownership and permissions
-      file:
-        path: "/var/www/html/nextcloud/"
-        owner: apache
-        group: apache
-        recurse: yes
-    
-    - name: Install Nextcloud
-      command: >
-        php occ maintenance:install 
-        --database={{ db_type }} 
-        --database-name={{ db_name }} 
-        --database-user={{ db_user }} 
-        --database-pass={{ db_password }}
-        --admin-user={{ admin_user }} 
-        --admin-pass={{ admin_password }}
-        --data-dir={{ nextcloud_data_dir }}
+      shell: unzip -q /tmp/nextcloud.zip -d /var/www/html/
       args:
-        chdir: "{{ nextcloud_install_dir }}"
-        creates: "{{ nextcloud_install_dir }}/config/config.php"
-      become_user: apache
+        creates: /var/www/html/nextcloud
+      when: not nextcloud_installed.stat.exists
     
-    - name: Configure trusted domain
-      command: >
-        php occ config:system:set trusted_domains 0 --value={{ nextcloud_domain }}
+    - name: Set proper ownership
+      shell: chown -R apache:apache /var/www/html/nextcloud/
       args:
-        chdir: "{{ nextcloud_install_dir }}"
-      become_user: apache
-    
-    - name: Set Apache configuration for Nextcloud
+        warn: false
+      when: not nextcloud_installed.stat.exists
+      
+    - name: Configure Apache for Nextcloud
       copy:
-        dest: "/etc/httpd/conf.d/nextcloud.conf"
+        dest: /etc/httpd/conf.d/nextcloud.conf
         content: |
           Alias /nextcloud "/var/www/html/nextcloud/"
 
@@ -138,71 +101,46 @@
             Options +FollowSymlinks
             AllowOverride All
             Require all granted
-            <IfModule mod_dav.c>
-              Dav off
-            </IfModule>
-            SetEnv HOME /var/www/html/nextcloud
-            SetEnv HTTP_HOME /var/www/html/nextcloud
           </Directory>
       notify: restart apache
     
-    - name: Set SELinux context for Nextcloud directories
-      command: semanage fcontext -a -t httpd_sys_rw_content_t "{{ item }}(/.*)?"
-      with_items:
-        - "{{ nextcloud_install_dir }}/data"
-        - "{{ nextcloud_install_dir }}/config"
-        - "{{ nextcloud_install_dir }}/apps"
-        - "{{ nextcloud_data_dir }}"
-      ignore_errors: yes
-    
-    - name: Apply SELinux context to Nextcloud directories
-      command: restorecon -Rv "{{ item }}"
-      with_items:
-        - "{{ nextcloud_install_dir }}"
-        - "{{ nextcloud_data_dir }}"
-      ignore_errors: yes
-    
-    - name: Open firewall for HTTP
-      firewalld:
-        service: http
-        permanent: yes
-        state: enabled
-      notify: reload firewall
-    
-    - name: Configure PHP settings for Nextcloud
+    - name: Configure PHP settings
       copy:
-        dest: "/etc/php.d/nextcloud.ini"
+        dest: /etc/php.d/90-nextcloud.ini
         content: |
           memory_limit = 512M
           upload_max_filesize = 500M
           post_max_size = 500M
           max_execution_time = 300
-          date.timezone = UTC
-      notify: restart php-fpm
+      notify: restart apache
     
-    - name: Display completion message
+    - name: Open firewall for HTTP
+      shell: |
+        firewall-cmd --permanent --add-service=http
+        firewall-cmd --reload
+      ignore_errors: yes
+      changed_when: false
+    
+    - name: Display installation message
       debug:
         msg: |
-          Nextcloud installation complete!
-          You can access your Nextcloud instance at: http://{{ nextcloud_domain }}/nextcloud
-          Admin user: {{ admin_user }}
-          Admin password: {{ admin_password }}
+          Nextcloud files have been installed to /var/www/html/nextcloud
           
-          Please change the admin password after first login.
+          To complete setup, open http://your-server-ip/nextcloud in your browser
+          
+          Use the following details for database setup:
+            Database: MySQL
+            Database name: {{ db_name }}
+            Database user: {{ db_user }}
+            Database password: {{ db_password }}
+            Database host: localhost
+            
+          For admin account setup:
+            Username: {{ admin_user }}
+            Password: {{ admin_password }}
   
   handlers:
     - name: restart apache
-      systemd:
+      service:
         name: httpd
         state: restarted
-    
-    - name: restart php-fpm
-      systemd:
-        name: php-fpm
-        state: restarted
-      ignore_errors: yes
-    
-    - name: reload firewall
-      systemd:
-        name: firewalld
-        state: reloaded
