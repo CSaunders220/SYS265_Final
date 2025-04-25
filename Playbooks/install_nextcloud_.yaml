@@ -1,7 +1,3 @@
----
-# Nextcloud Deployment Playbook without DNF module
-# Avoids the dnf module that's causing Python compatibility issues
-
 - name: Deploy Nextcloud with Ansible
   hosts: util-caw
   become: yes
@@ -14,9 +10,6 @@
     db_user: "nextcloud"
     db_password: "ChangeMe123!"  # Change this in production!
     
-    # Web server configuration
-    nextcloud_domain: "localhost"
-    
     # Admin account
     admin_user: "ncadmin"
     admin_password: "ChangeMe123!"  # Change this in production!
@@ -27,21 +20,17 @@
     
   tasks:
     - name: Install required packages
-      command: >
-        yum install -y httpd mariadb-server php php-gd php-mbstring php-intl
-        php-mysqlnd php-opcache php-xml php-zip php-json php-curl wget unzip
+      shell: yum install -y httpd mariadb-server php php-gd php-mbstring php-intl php-mysqlnd php-opcache php-xml php-zip php-json php-curl wget unzip
       args:
-        warn: false
-      register: pkg_result
-      changed_when: "'Nothing to do' not in pkg_result.stdout"
+        executable: /bin/bash
     
-    - name: Start and enable MariaDB
+    - name: Start MariaDB
       service:
         name: mariadb
         state: started
         enabled: yes
     
-    - name: Start and enable Apache
+    - name: Start Apache
       service:
         name: httpd
         state: started
@@ -53,7 +42,8 @@
         mysql -e "CREATE USER IF NOT EXISTS '{{ db_user }}'@'localhost' IDENTIFIED BY '{{ db_password }}';"
         mysql -e "GRANT ALL PRIVILEGES ON {{ db_name }}.* TO '{{ db_user }}'@'localhost';"
         mysql -e "FLUSH PRIVILEGES;"
-      changed_when: false
+      args:
+        executable: /bin/bash
     
     - name: Create Nextcloud data directory
       file:
@@ -110,7 +100,11 @@
               Dav off
             </IfModule>
           </Directory>
-      notify: restart apache
+    
+    - name: Restart Apache
+      service:
+        name: httpd
+        state: restarted
     
     - name: Configure PHP for Nextcloud
       copy:
@@ -121,16 +115,18 @@
           post_max_size = 500M
           max_execution_time = 300
           date.timezone = UTC
-      notify: restart apache
+    
+    - name: Restart Apache after PHP config
+      service:
+        name: httpd
+        state: restarted
     
     - name: Open firewall for HTTP
-      command: firewall-cmd --permanent --add-service=http
-      register: fw_result
-      changed_when: "'success' in fw_result.stdout"
-      
-    - name: Reload firewall
-      command: firewall-cmd --reload
-      changed_when: false
+      shell: |
+        firewall-cmd --permanent --add-service=http
+        firewall-cmd --reload
+      args:
+        executable: /bin/bash
     
     - name: Display completion message
       debug:
@@ -148,9 +144,3 @@
             
             Admin username: {{ admin_user }}
             Admin password: {{ admin_password }}
-  
-  handlers:
-    - name: restart apache
-      service:
-        name: httpd
-        state: restarted
