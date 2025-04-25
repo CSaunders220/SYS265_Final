@@ -8,11 +8,11 @@
     # Database configuration
     db_name: "nextcloud"
     db_user: "nextcloud"
-    db_password: "ChangeMe123!"  # Change this in production!
+    db_password: "ChangeMe123!"
     
     # Admin account
     admin_user: "ncadmin"
-    admin_password: "ChangeMe123!"  # Change this in production!
+    admin_password: "ChangeMe123!"
     
     # Paths
     nextcloud_data_dir: "/var/nc-data"
