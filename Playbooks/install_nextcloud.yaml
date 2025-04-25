@@ -1,97 +1,68 @@
-
 - name: Deploy Nextcloud on util-caw
   hosts: util-caw
   become: yes
-  vars:
-    # Nextcloud version
-    nextcloud_version: "27.1.2"
-    
-    # Database configuration
-    db_name: "nextcloud"
-    db_user: "nextcloud"
-    db_password: "ChangeMe123!"  # Change this in production!
-    
-    # Web server configuration
-    nextcloud_domain: "localhost"
-    
-    # Admin account
-    admin_user: "ncadmin"
-    admin_password: "ChangeMe123!"  # Change this in production!
-    
-    # Paths
-    nextcloud_data_dir: "/var/nc-data"
-    
+  
   tasks:
-    - name: Install dependencies
-      yum:
-        name:
-          - httpd
-          - mariadb-server
-          - php
-          - php-gd
-          - php-mbstring
-          - php-intl
-          - php-mysqlnd
-          - php-opcache
-          - php-xml
-          - php-zip
-          - wget
-          - unzip
-        state: present
-    
+    - name: Install Apache, MariaDB, PHP and dependencies
+      command: dnf install -y httpd mariadb-server php php-gd php-mbstring php-intl php-mysqlnd php-opcache php-xml php-zip wget unzip
+      args:
+        warn: no
+        
     - name: Start and enable MariaDB
-      service:
-        name: mariadb
-        state: started
-        enabled: yes
-    
+      command: "{{ item }}"
+      with_items:
+        - systemctl start mariadb
+        - systemctl enable mariadb
+      args:
+        warn: no
+        
     - name: Start and enable Apache
-      service:
-        name: httpd
-        state: started
-        enabled: yes
-    
+      command: "{{ item }}"
+      with_items:
+        - systemctl start httpd
+        - systemctl enable httpd
+      args:
+        warn: no
+        
     - name: Create Nextcloud database
-      shell: |
-        mysql -e "CREATE DATABASE IF NOT EXISTS {{ db_name }} CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
-        mysql -e "CREATE USER IF NOT EXISTS '{{ db_user }}'@'localhost' IDENTIFIED BY '{{ db_password }}';"
-        mysql -e "GRANT ALL PRIVILEGES ON {{ db_name }}.* TO '{{ db_user }}'@'localhost';"
-        mysql -e "FLUSH PRIVILEGES;"
-      changed_when: false
-    
+      command: "{{ item }}"
+      with_items:
+        - mysql -e "CREATE DATABASE IF NOT EXISTS nextcloud CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;"
+        - mysql -e "CREATE USER IF NOT EXISTS 'nextcloud'@'localhost' IDENTIFIED BY 'password';"
+        - mysql -e "GRANT ALL PRIVILEGES ON nextcloud.* TO 'nextcloud'@'localhost';"
+        - mysql -e "FLUSH PRIVILEGES;"
+      args:
+        warn: no
+        
     - name: Create Nextcloud data directory
-      file:
-        path: "{{ nextcloud_data_dir }}"
-        state: directory
-        owner: apache
-        group: apache
-        mode: '0750'
-    
-    - name: Check if Nextcloud is already installed
-      stat:
-        path: /var/www/html/nextcloud
-      register: nextcloud_installed
-    
+      command: mkdir -p /var/nc-data
+      args:
+        creates: /var/nc-data
+        warn: no
+        
+    - name: Set permissions on data directory
+      command: chown apache:apache /var/nc-data
+      args:
+        warn: no
+        
     - name: Download Nextcloud
-      get_url:
-        url: "https://download.nextcloud.com/server/releases/nextcloud-{{ nextcloud_version }}.zip"
-        dest: "/tmp/nextcloud.zip"
-        mode: '0644'
-      when: not nextcloud_installed.stat.exists
-    
+      command: wget -q https://download.nextcloud.com/server/releases/latest.zip -O /tmp/nextcloud.zip
+      args:
+        creates: /tmp/nextcloud.zip
+        warn: no
+        
     - name: Extract Nextcloud
-      shell: unzip -q /tmp/nextcloud.zip -d /var/www/html/
+      command: unzip -q /tmp/nextcloud.zip -d /var/www/html/
       args:
         creates: /var/www/html/nextcloud
-      when: not nextcloud_installed.stat.exists
-    
-    - name: Set proper ownership
-      shell: chown -R apache:apache /var/www/html/nextcloud/
+        warn: no
+        
+    - name: Set ownership for Nextcloud
+      command: chown -R apache:apache /var/www/html/nextcloud/
       args:
-        warn: false
-      when: not nextcloud_installed.stat.exists
-      
-    - name: Configure Apache for Nextcloud
+        warn: no
+        
+    - name: Create Apache configuration for Nextcloud
       copy:
         dest: /etc/httpd/conf.d/nextcloud.conf
         content: |
@@ -102,26 +73,22 @@
             AllowOverride All
             Require all granted
           </Directory>
-      notify: restart apache
-    
-    - name: Configure PHP settings
-      copy:
-        dest: /etc/php.d/90-nextcloud.ini
-        content: |
-          memory_limit = 512M
-          upload_max_filesize = 500M
-          post_max_size = 500M
-          max_execution_time = 300
-      notify: restart apache
-    
+          
+    - name: Restart Apache
+      command: systemctl restart httpd
+      args:
+        warn: no
+        
     - name: Open firewall for HTTP
-      shell: |
-        firewall-cmd --permanent --add-service=http
-        firewall-cmd --reload
+      command: "{{ item }}"
+      with_items:
+        - firewall-cmd --permanent --add-service=http
+        - firewall-cmd --reload
+      args:
+        warn: no
       ignore_errors: yes
-      changed_when: false
-    
-    - name: Display installation message
+      
+    - name: Show completion message
       debug:
         msg: |
           Nextcloud files have been installed to /var/www/html/nextcloud
@@ -129,18 +96,8 @@
           To complete setup, open http://your-server-ip/nextcloud in your browser
           
           Use the following details for database setup:
-            Database: MySQL
-            Database name: {{ db_name }}
-            Database user: {{ db_user }}
-            Database password: {{ db_password }}
+            Database: MySQL/MariaDB
+            Database name: nextcloud
+            Database user: nextcloud
+            Database password: password
             Database host: localhost
-            
-          For admin account setup:
-            Username: {{ admin_user }}
-            Password: {{ admin_password }}
-  
-  handlers:
-    - name: restart apache
-      service:
-        name: httpd
-        state: restarted
