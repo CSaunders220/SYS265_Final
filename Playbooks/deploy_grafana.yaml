@@ -1,0 +1,31 @@
+---
+- name: Install Grafana directly
+  hosts: util-caw
+  gather_facts: false
+  become: yes
+  tasks:
+    - name: Add Grafana repo
+      ansible.builtin.copy:
+        content: |
+          [grafana]
+          name=grafana
+          baseurl=https://rpm.grafana.com
+          repo_gpgcheck=1
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://rpm.grafana.com/gpg.key
+          sslverify=1
+          sslcacert=/etc/pki/tls/certs/ca-bundle.crt
+        dest: /etc/yum.repos.d/grafana.repo
+        mode: '0644'
+      
+    - name: Install Grafana package
+      ansible.builtin.shell: dnf install -y grafana
+      args:
+        warn: false
+        
+    - name: Start and enable Grafana service
+      ansible.builtin.service:
+        name: grafana-server
+        state: started
+        enabled: yes
